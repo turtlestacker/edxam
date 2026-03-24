@@ -244,8 +244,8 @@ export default function Home() {
     <main className="mx-auto min-h-screen max-w-5xl p-4 md:p-8">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Revision Tracker</h1>
-          <p className="text-sm text-slate-300">Single-student exam-led planner</p>
+          <h1 className="text-2xl font-bold">EDXAM</h1>
+          <p className="text-sm text-slate-300">Because its sooo serious</p>
         </div>
         <div className="flex gap-2">
           {(["today", "plan", "progress"] as Tab[]).map((t) => (
