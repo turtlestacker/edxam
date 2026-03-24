@@ -62,10 +62,14 @@ export default function Home() {
     [sessions]
   );
 
-  const nextExam = useMemo(() => EXAMS.find((e) => new Date(e.dateTime) >= new Date()), []);
-  const daysLeft = nextExam
-    ? Math.ceil((+new Date(nextExam.dateTime) - +new Date()) / (24 * 60 * 60 * 1000))
-    : null;
+  const [nextExam, setNextExam] = useState<(typeof EXAMS)[number] | null>(null);
+  const [daysLeft, setDaysLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    const exam = EXAMS.find((e) => new Date(e.dateTime) >= new Date()) ?? null;
+    setNextExam(exam);
+    setDaysLeft(exam ? Math.ceil((+new Date(exam.dateTime) - +new Date()) / (24 * 60 * 60 * 1000)) : null);
+  }, []);
 
   const prompt = todaySessions
     .map((s) => `${SUBJECTS.find((x) => x.id === s.subjectId)?.name} ${s.plannedMinutes}m`)
