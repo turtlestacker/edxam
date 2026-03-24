@@ -1,6 +1,7 @@
 import { ReminderConfig, ReviewLog, RevisionSession } from "./types";
 
 const SESSIONS_KEY = "revision.sessions.v1";
+const PUSH_SUB_KEY = "revision.pushSubscription.v1";
 const REVIEWS_KEY = "revision.reviews.v1";
 const REMINDER_KEY = "revision.reminders.v1";
 
@@ -34,4 +35,17 @@ export function loadReminder(): ReminderConfig {
 
 export function saveReminder(config: ReminderConfig) {
   globalThis.localStorage?.setItem(REMINDER_KEY, JSON.stringify(config));
+}
+
+export function loadPushSubscription(): PushSubscriptionJSON | null {
+  const raw = globalThis.localStorage?.getItem(PUSH_SUB_KEY);
+  return raw ? (JSON.parse(raw) as PushSubscriptionJSON) : null;
+}
+
+export function savePushSubscription(sub: PushSubscriptionJSON | null) {
+  if (sub) {
+    globalThis.localStorage?.setItem(PUSH_SUB_KEY, JSON.stringify(sub));
+  } else {
+    globalThis.localStorage?.removeItem(PUSH_SUB_KEY);
+  }
 }

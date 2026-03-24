@@ -32,3 +32,27 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+self.addEventListener("push", (event) => {
+  let data = { title: "Revision Tracker", body: "Time to revise!" };
+  if (event.data) {
+    try { data = event.data.json(); } catch {}
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icon.svg",
+      badge: "/icon.svg"
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      if (clientList.length > 0) return clientList[0].focus();
+      return clients.openWindow("/");
+    })
+  );
+});

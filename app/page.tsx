@@ -5,9 +5,11 @@ import { EXAMS, SUBJECTS } from "../lib/data";
 import { generatePlan, plannedMinutesForDate, rescheduleMissedSession } from "../lib/scheduler";
 import {
   defaultReminder,
+  loadPushSubscription,
   loadReminder,
   loadReviews,
   loadSessions,
+  savePushSubscription,
   saveReminder,
   saveReviews,
   saveSessions
@@ -34,6 +36,7 @@ export default function Home() {
   const [reviews, setReviews] = useState<ReviewLog[]>([]);
   const [reminder, setReminder] = useState<ReminderConfig>(defaultReminder);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [pushSubscription, setPushSubscription] = useState<PushSubscriptionJSON | null>(null);
   const primaryTimerRef = useRef<number | null>(null);
   const secondaryTimerRef = useRef<number | null>(null);
 
@@ -54,8 +57,29 @@ export default function Home() {
 
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
-    navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    navigator.serviceWorker.register("/sw.js").then(async () => {
+      const existing = loadPushSubscription();
+      if (existing) { setPushSubscription(existing); return; }
+      await subscribeToPush();
+    }).catch(() => undefined);
   }, []);
+
+  async function subscribeToPush() {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const keyRes = await fetch("/api/vapid-public-key");
+      const { publicKey } = await keyRes.json();
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: publicKey
+      });
+      const json = sub.toJSON();
+      savePushSubscription(json);
+      setPushSubscription(json);
+    } catch {
+      // Push not supported or permission denied — fall back silently
+    }
+  }
 
   const todaySessions = useMemo(
     () => sessions.filter((s) => s.date === todayYmd()).sort((a, b) => a.id.localeCompare(b.id)),
@@ -83,13 +107,18 @@ export default function Home() {
     return window.prompt(message, fallback) || fallback;
   }
 
-  function sendReminder(message?: string) {
-    if (!("Notification" in window)) return;
-    Notification.requestPermission().then((perm) => {
-      if (perm !== "granted") return;
-      const body = message ?? (prompt ? `Tonight: ${prompt}` : "No sessions scheduled today");
-      new Notification("Revision Tracker", { body });
-    });
+  async function sendReminder(message?: string) {
+    const body = message ?? (prompt ? `Tonight: ${prompt}` : "No sessions scheduled today");
+    if (pushSubscription) {
+      await fetch("/api/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription: pushSubscription, message: body })
+      });
+    } else {
+      // Fallback: try to subscribe first, then re-attempt
+      await subscribeToPush();
+    }
   }
 
   useEffect(() => {
