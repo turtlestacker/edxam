@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { EXAMS, SUBJECTS } from "../lib/data";
 import { generatePlan, plannedMinutesForDate, rescheduleMissedSession } from "../lib/scheduler";
 import {
@@ -36,6 +37,7 @@ export default function Home() {
   const [reviews, setReviews] = useState<ReviewLog[]>([]);
   const [reminder, setReminder] = useState<ReminderConfig>(defaultReminder);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(SUBJECTS[0].id);
   const [pushSubscription, setPushSubscription] = useState<PushSubscriptionJSON | null>(null);
   const primaryTimerRef = useRef<number | null>(null);
   const secondaryTimerRef = useRef<number | null>(null);
@@ -214,6 +216,24 @@ export default function Home() {
     });
   }, [reviews, sessions]);
 
+  const chartData = useMemo(() => {
+    const bySub = sessions.filter((s) => s.subjectId === selectedSubjectId);
+    const byDate = new Map<string, { target: number; actual: number | null }>();
+    bySub.forEach((s) => {
+      const entry = byDate.get(s.date) ?? { target: 0, actual: null };
+      entry.target += s.plannedMinutes;
+      if (s.status === "done") entry.actual = (entry.actual ?? 0) + s.actualMinutes;
+      byDate.set(s.date, entry);
+    });
+    return [...byDate.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([date, { target, actual }]) => ({
+        date: new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+        target,
+        actual
+      }));
+  }, [sessions, selectedSubjectId]);
+
   function moveDraggedSessionToDate(date: string) {
     if (!draggingId) return;
     setSessions((prev) => prev.map((s) => (s.id === draggingId ? { ...s, date, status: "planned" } : s)));
@@ -366,16 +386,68 @@ export default function Home() {
       )}
 
       {tab === "progress" && (
-        <section className="grid gap-3 md:grid-cols-2">
-          {progress.map((row) => (
-            <div key={row.subject} className="card">
-              <h3 className="font-semibold">{row.subject}</h3>
-              <p className="text-sm text-slate-300">Minutes completed: {row.minutesDone}</p>
-              <p className="text-sm text-slate-300">Completion rate: {row.rate}%</p>
-              <p className="text-sm text-slate-300">Last revised: {row.last}</p>
-              <p className="text-sm text-slate-300">Confidence trend: {row.trend}</p>
-            </div>
-          ))}
+        <section className="space-y-4">
+          <div className="card flex items-center gap-3">
+            <label htmlFor="subject-select" className="text-sm text-slate-400 whitespace-nowrap">Subject</label>
+            <select
+              id="subject-select"
+              className="flex-1 rounded bg-slate-800 px-3 py-2 text-sm"
+              value={selectedSubjectId}
+              onChange={(e) => setSelectedSubjectId(e.target.value)}
+            >
+              {SUBJECTS.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="card">
+            <h3 className="mb-4 font-semibold">Target vs Actual minutes</h3>
+            {chartData.length === 0 ? (
+              <p className="text-sm text-slate-400">No sessions planned for this subject yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#94a3b8" }} interval="preserveStartEnd" />
+                  <YAxis unit="m" tick={{ fontSize: 11, fill: "#94a3b8" }} />
+                  <Tooltip
+                    contentStyle={{ background: "#1e293b", border: "none", borderRadius: 8 }}
+                    labelStyle={{ color: "#e2e8f0" }}
+                    formatter={(value, name) => [`${value}m`, name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Line type="monotone" dataKey="target" stroke="#6366f1" strokeWidth={2} dot={false} name="Target" />
+                  <Line type="monotone" dataKey="actual" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} name="Actual" />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {(() => {
+            const row = progress.find((p) => p.subject === SUBJECTS.find((s) => s.id === selectedSubjectId)?.name);
+            if (!row) return null;
+            return (
+              <div className="card grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-slate-400">Minutes done</p>
+                  <p className="font-semibold">{row.minutesDone}m</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Completion</p>
+                  <p className="font-semibold">{row.rate}%</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Last revised</p>
+                  <p className="font-semibold">{row.last}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Confidence trend</p>
+                  <p className="font-semibold">{row.trend}</p>
+                </div>
+              </div>
+            );
+          })()}
         </section>
       )}
     </main>
